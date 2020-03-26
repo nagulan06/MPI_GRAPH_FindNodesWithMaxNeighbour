@@ -81,22 +81,25 @@ int main()
         } 
     }
     
-   // cout<<endl;
     vector<int> local_vec;
         
     pair<int, int> top = pq.top();
     int local_best = top.first;
     while(1)
     {
-        local_vec.push(top.first);
-        local_vec.push(top.second);
+        cout<<"top: "<<top.first<<"local_best: "<<local_best<<endl;
+        local_vec.push_back(top.first);
+        local_vec.push_back(top.second);
         pq.pop();
         top = pq.top();
-        if(top.first ! = local_best)
+        if(top.first != local_best)
             break;
     }
     
-    cout<<rank<<": count =  "<<top.first <<"  node = "<<top.second<<endl;
+    for(int i = 0; i < local_vec.size(); i++)
+        cout<<rank<<":  "<<local_vec[i];
+    
+    cout<<endl;
 
     MPI_Finalize();
     return 0;
