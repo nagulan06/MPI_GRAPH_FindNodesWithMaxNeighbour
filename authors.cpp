@@ -7,14 +7,20 @@
 
 using namespace std;
 
-//#define NODES 317080
-#define NODES 317080L
+#define NODES 317080
 
 int main()
 {
     int rank, size, index;
     ifstream file;
-    long nodes[NODES][NODES] = {0}, x, y;
+    int a, b;
+    int list[2099732] = {0};
+    int **nodes = new int*[NODES];
+    for(int i=0; i<NODES; i++)
+    {
+        nodes[i] = new int[NODES];
+    }
+    int  x, y;
     string useless;
     priority_queue<pair<long ,long> > pq;
     priority_queue<pair<long ,long> > pq_final;
@@ -23,29 +29,39 @@ int main()
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
     MPI_Comm_size(MPI_COMM_WORLD, &size);
     long split = NODES/size;
-    //read file contents on the head node and create a graph with adjacency matrix
+    //read file contents on the head node
     if(rank == 0)
     {
         file.open("dblp-co-authors.txt");
-//        file.open("test.txt");        
         if(file.fail())
             cerr<<"could not open file";
 
         for(int i=0; i<5; i++)
             getline(file, useless);
-
-        while(!(file.eof()))
-        {
-            file>>x>>y;
-            nodes[x-1][y-1] = 1;
-            nodes[y-1][x-1] = 1;
+        
+        int in = 0;
+        while(file>>a)
+        {   
+            list[in] = a;
+            in++;
         }
     }
     
-    //send the adjacency matrix to all other nodes by broadcast.
-    MPI_Bcast(&nodes[0][0], NODES*NODES, MPI_LONG, 0, MPI_COMM_WORLD);
+    //send the file contents to all other nodes by broadcast.
+    MPI_Bcast(&list[0], 2099732, MPI_INT, 0, MPI_COMM_WORLD);
 
-    //split the matrix to each node and let the each node find the author with maximimum co-authors
+
+
+    //create an adjacency matrix with the file data
+    for(int i=0; i<2099732; i = i+2)
+    {
+        x = list[i];
+        y = list[i+1];
+        nodes[x-1][y-1] = 1;
+        nodes[y-1][x-1] = 1;
+    }
+     
+    //let the each node find the author with maximimum co-authors
     //Then, each nodes add its found value to a vector
     //This vector is collected at the head node and the final list of authors with maximum co-authors is printed out.
     long k = 0;
@@ -61,7 +77,8 @@ int main()
         pq.push(make_pair(count, i+1));
         k++;
     }
-
+    //if the number of process is not exactly divisible by the number of rows, there will be some leftover
+    //The head node handles them.
     if(NODES%size != 0)
     {
         if(rank == 0)
@@ -82,6 +99,8 @@ int main()
         } 
     }
  //create a vector that contains all the authors with most number of co-authors (calculated by individual nodes) 
+ //create a pair containing the count of co-authors and the author number
+ //Push them onto a priority queue so that the author with the highest co-author will always be at the top
     vector<long> local_vec;
     pair<long, long> top = pq.top();
     long local_best = top.first;
@@ -94,13 +113,8 @@ int main()
         if(top.first != local_best)
             break;
     }
-    for(long i=0; i<local_vec.size(); i++)
-    {
-        cout<<rank<<":  "<<local_vec[i]<<"  ";
-    }
-    cout<<endl;
-
-    MPI_Barrier(MPI_COMM_WORLD);
+ 
+  //  MPI_Barrier(MPI_COMM_WORLD);
 
     int *counts = new int[size];
     int nelements = (int)local_vec.size();
@@ -123,14 +137,6 @@ int main()
 
    // Gatherv is used to gather variable length arrays (in this case, Vector)
     MPI_Gatherv(&local_vec[0], nelements, MPI_LONG, final_vec, counts, disps, MPI_LONG, 0, MPI_COMM_WORLD);
-/*
-    if(rank == 0)
-    {   
-        cout<<rank<<":  ";
-        for(int i = 0; i < total; i++)
-            cout<<final_vec[i]<<"  ";
-    }
-    cout<<endl;*/
 
     if(rank == 0)
     {
